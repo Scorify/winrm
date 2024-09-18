@@ -1,4 +1,4 @@
-package check_template
+package winrm
 
 import (
 	"context"
