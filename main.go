@@ -1,33 +1,69 @@
-package check_template
+package winrm
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
+	"github.com/masterzen/winrm"
 )
 
-// Schema is a custom defined struct that will hold the check configuration
 type Schema struct {
-	Target string `json:"target"` // Make sure to use the json tags to define the key in the config
-	Port   int    `json:"port"`
-
-	// Add any additional fields that you want to pass in as config
+	Target         string `json:"target"`
+	Port           int    `json:"port"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	Command        string `json:"command"`
+	ExpectedOutput string `json:"expected_output"`
+	HTTPS          bool   `json:"https"`
+	Insecure       bool   `json:"insecure"`
 }
 
-// Run is the function that will get called to run an instance of a check
 func Run(ctx context.Context, config string) error {
-	// Define a new Schema
 	schema := Schema{}
 
-	// Unmarshal the config to the Schema
 	err := json.Unmarshal([]byte(config), &schema)
 	if err != nil {
 		return err
 	}
 
-	// Custom logic to run the check
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return fmt.Errorf("failed to get context deadline")
+	}
 
-	fmt.Println("Running check with target:", schema.Target, "and port:", schema.Port)
+	timeout := time.Until(deadline)
+
+	endpoint := winrm.NewEndpoint(
+		schema.Target,
+		schema.Port,
+		schema.HTTPS,
+		schema.Insecure,
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		timeout,
+	)
+
+	client, err := winrm.NewClient(endpoint, schema.Username, schema.Password)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %v", err)
+	}
+
+	stdout, stderr, _, err := client.RunCmdWithContext(ctx, schema.Command)
+	if err != nil {
+		return fmt.Errorf("failed to run command: %v", err)
+	}
+
+	if stderr != "" {
+		return fmt.Errorf("command returned error: %s", stderr)
+	}
+
+	if strings.TrimSpace(stdout) != strings.TrimSpace(schema.ExpectedOutput) {
+		return fmt.Errorf("expected output does not match actual output: %q != %q", schema.ExpectedOutput, stdout)
+	}
 
 	return nil
 }
