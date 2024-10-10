@@ -2,29 +2,60 @@ package winrm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/masterzen/winrm"
+	"github.com/scorify/schema"
 )
 
 type Schema struct {
-	Target         string `json:"target"`
-	Port           int    `json:"port"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	Command        string `json:"command"`
-	ExpectedOutput string `json:"expected_output"`
-	HTTPS          bool   `json:"https"`
-	Insecure       bool   `json:"insecure"`
+	Server         string `key:"server"`
+	Port           int    `key:"port" default:"5985"`
+	Username       string `key:"username"`
+	Password       string `key:"password"`
+	Command        string `key:"command"`
+	ExpectedOutput string `key:"expected_output"`
+	HTTPS          bool   `key:"https"`
+	Insecure       bool   `key:"insecure"`
+}
+
+func Validate(config string) error {
+	conf := Schema{}
+
+	err := schema.Unmarshal([]byte(config), &conf)
+	if err != nil {
+		return err
+	}
+
+	if conf.Server == "" {
+		return fmt.Errorf("server is required, got %q", conf.Server)
+	}
+
+	if conf.Port >= 65536 || conf.Port <= 0 {
+		return fmt.Errorf("valid port is required, got %d", conf.Port)
+	}
+
+	if conf.Username == "" {
+		return fmt.Errorf("username is required; got %q", conf.Username)
+	}
+
+	if conf.Command == "" {
+		return fmt.Errorf("command is required; got %q", conf.Command)
+	}
+
+	if conf.ExpectedOutput == "" {
+		return fmt.Errorf("expected_output is required; got %q", conf.ExpectedOutput)
+	}
+
+	return nil
 }
 
 func Run(ctx context.Context, config string) error {
-	schema := Schema{}
+	conf := Schema{}
 
-	err := json.Unmarshal([]byte(config), &schema)
+	err := schema.Unmarshal([]byte(config), &conf)
 	if err != nil {
 		return err
 	}
@@ -37,22 +68,22 @@ func Run(ctx context.Context, config string) error {
 	timeout := time.Until(deadline)
 
 	endpoint := winrm.NewEndpoint(
-		schema.Target,
-		schema.Port,
-		schema.HTTPS,
-		schema.Insecure,
+		conf.Server,
+		conf.Port,
+		conf.HTTPS,
+		conf.Insecure,
 		[]byte{},
 		[]byte{},
 		[]byte{},
 		timeout,
 	)
 
-	client, err := winrm.NewClient(endpoint, schema.Username, schema.Password)
+	client, err := winrm.NewClient(endpoint, conf.Username, conf.Password)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %v", err)
 	}
 
-	stdout, stderr, _, err := client.RunCmdWithContext(ctx, schema.Command)
+	stdout, stderr, _, err := client.RunCmdWithContext(ctx, conf.Command)
 	if err != nil {
 		return fmt.Errorf("failed to run command: %v", err)
 	}
@@ -61,8 +92,8 @@ func Run(ctx context.Context, config string) error {
 		return fmt.Errorf("command returned error: %s", stderr)
 	}
 
-	if strings.TrimSpace(stdout) != strings.TrimSpace(schema.ExpectedOutput) {
-		return fmt.Errorf("expected output does not match actual output: %q != %q", schema.ExpectedOutput, stdout)
+	if strings.TrimSpace(stdout) != strings.TrimSpace(conf.ExpectedOutput) {
+		return fmt.Errorf("expected output does not match actual output: %q != %q", conf.ExpectedOutput, stdout)
 	}
 
 	return nil

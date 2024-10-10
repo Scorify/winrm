@@ -1,8 +1,13 @@
 module github.com/scorify/winrm
 
-go 1.21.6
+go 1.22.6
 
-require github.com/masterzen/winrm v0.0.0-20240702205601-3fad6e106085
+toolchain go1.22.7
+
+require (
+	github.com/masterzen/winrm v0.0.0-20240702205601-3fad6e106085
+	github.com/scorify/schema v0.0.0
+)
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
