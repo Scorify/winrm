@@ -11,14 +11,14 @@ import (
 )
 
 type Schema struct {
-	Target         string `json:"target"`
-	Port           int    `json:"port"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	Command        string `json:"command"`
-	ExpectedOutput string `json:"expected_output"`
-	HTTPS          bool   `json:"https"`
-	Insecure       bool   `json:"insecure"`
+	Server         string `key:"server"`
+	Port           int    `key:"port" default:"5985"`
+	Username       string `key:"username"`
+	Password       string `key:"password"`
+	Command        string `key:"command"`
+	ExpectedOutput string `key:"expected_output"`
+	HTTPS          bool   `key:"https"`
+	Insecure       bool   `key:"insecure"`
 }
 
 func Run(ctx context.Context, config string) error {
