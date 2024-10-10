@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/masterzen/winrm"
+	"github.com/scorify/schema"
 )
 
 type Schema struct {
@@ -19,6 +20,37 @@ type Schema struct {
 	ExpectedOutput string `key:"expected_output"`
 	HTTPS          bool   `key:"https"`
 	Insecure       bool   `key:"insecure"`
+}
+
+func Validate(config string) error {
+	conf := Schema{}
+
+	err := schema.Unmarshal([]byte(config), &conf)
+	if err != nil {
+		return err
+	}
+
+	if conf.Server == "" {
+		return fmt.Errorf("server is required, got %q", schema.Server)
+	}
+
+	if conf.Port >= 65536 || schema.Port <= 0 {
+		return fmt.Errorf("valid port is required, got %d", schema.Port)
+	}
+
+	if conf.Username == "" {
+		return fmt.Errorf("username is required; got %q", schema.Username)
+	}
+
+	if conf.Command == "" {
+		return fmt.Errorf("command is required; got %q", schema.Command)
+	}
+
+	if conf.ExpectedOutput == "" {
+		return fmt.Errorf("expected_output is required; got %q", schema.ExpectedOutput)
+	}
+
+	return nil
 }
 
 func Run(ctx context.Context, config string) error {
