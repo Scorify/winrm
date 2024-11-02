@@ -64,37 +64,51 @@ func Run(ctx context.Context, config string) error {
 	if !ok {
 		return fmt.Errorf("failed to get context deadline")
 	}
-
 	timeout := time.Until(deadline)
+	errChan := make(chan error, 1)
 
-	endpoint := winrm.NewEndpoint(
-		conf.Server,
-		conf.Port,
-		conf.HTTPS,
-		conf.Insecure,
-		[]byte{},
-		[]byte{},
-		[]byte{},
-		timeout,
-	)
+	go func() {
+		endpoint := winrm.NewEndpoint(
+			conf.Server,
+			conf.Port,
+			conf.HTTPS,
+			conf.Insecure,
+			[]byte{},
+			[]byte{},
+			[]byte{},
+			timeout,
+		)
 
-	client, err := winrm.NewClient(endpoint, conf.Username, conf.Password)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %v", err)
+		defer close(errChan)
+		client, err := winrm.NewClient(endpoint, conf.Username, conf.Password)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to create client: %v", err)
+			return
+		}
+
+		stdout, stderr, _, err := client.RunCmdWithContext(ctx, conf.Command)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to run command: %v", err)
+			return
+		}
+
+		if stderr != "" {
+			errChan <- fmt.Errorf("command returned error: %s", stderr)
+			return
+		}
+
+		if strings.TrimSpace(stdout) != strings.TrimSpace(conf.ExpectedOutput) {
+			errChan <- fmt.Errorf("expected output does not match actual output: %q != %q", conf.ExpectedOutput, stdout)
+			return
+		}
+
+		errChan <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errChan:
+		return err
 	}
-
-	stdout, stderr, _, err := client.RunCmdWithContext(ctx, conf.Command)
-	if err != nil {
-		return fmt.Errorf("failed to run command: %v", err)
-	}
-
-	if stderr != "" {
-		return fmt.Errorf("command returned error: %s", stderr)
-	}
-
-	if strings.TrimSpace(stdout) != strings.TrimSpace(conf.ExpectedOutput) {
-		return fmt.Errorf("expected output does not match actual output: %q != %q", conf.ExpectedOutput, stdout)
-	}
-
-	return nil
 }
